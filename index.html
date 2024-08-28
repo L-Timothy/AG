@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Generation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="app()" class="bg-gray-100">
+    <div class="flex">
+        <!-- 左侧固定导航栏 -->
+        <div class="fixed left-0 top-0 h-screen w-16 bg-gray-800 text-white flex flex-col items-center py-4">
+            <button @click="toggleTab('settings')" class="mb-4">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </button>
+            <button @click="toggleTab('topics')" class="mb-4">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            </button>
+        </div>
+
+        <!-- 设置侧边栏 -->
+        <div x-show="activeTab === 'settings'" class="fixed left-16 top-0 w-64 h-screen bg-white p-4 shadow-lg overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4">设置</h2>
+            <div class="mb-4">
+                <label class="block mb-2">API URL (不包含 "/v1/chat/completions")</label>
+                <input type="text" x-model="settings.apiUrl" @change="saveSettings()" class="w-full p-2 border rounded">
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">API Key</label>
+                <input type="password" x-model="settings.apiKey" @change="saveSettings()" class="w-full p-2 border rounded">
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">选择模型</label>
+                <select x-model="settings.model" @change="saveSettings()" class="w-full p-2 border rounded">
+                    <option value="claude-3-5-sonnet-20240620">claude-3-5-sonnet-20240620</option>
+                    <option value="claude-3-opus-20240229">claude-3-opus-20240229</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">Temperature (0-1)</label>
+                <input type="number" x-model="settings.temperature" @change="saveSettings()" min="0" max="1" step="0.1" class="w-full p-2 border rounded">
+            </div>
+            <div class="mb-4">
+                <label class="block mb-2">文章数量</label>
+                <input type="number" x-model="settings.articleCount" @change="saveSettings()" min="1" class="w-full p-2 border rounded">
+            </div>
+        </div>
+
+        <!-- 主题侧边栏 -->
+        <div x-show="activeTab === 'topics'" class="fixed left-16 top-0 w-64 h-screen bg-white p-4 shadow-lg overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4">主题</h2>
+            <div class="mb-4">
+                <input type="text" x-model="newTopic" @keyup.enter="addTopic()" placeholder="输入新主题" class="w-full p-2 border rounded">
+                <button @click="addTopic()" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded w-full">添加主题</button>
+            </div>
+            <ul class="space-y-2">
+                <template x-for="topic in topics" :key="topic">
+                    <li :class="{'bg-blue-100': currentTopic === topic}" class="flex justify-between items-center p-2 rounded hover:bg-gray-100 cursor-pointer" @click="selectTopic(topic)">
+                        <span x-text="topic" class="flex-grow"></span>
+                        <button @click.stop="deleteTopic(topic)" class="text-red-500 hover:text-red-700 ml-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </li>
+                </template>
+            </ul>
+        </div>
+
+        <!-- 主要内容区域 -->
+        <div class="flex-1 ml-80 p-6">
+            <div class="mb-6 relative">
+                <label class="block mb-2">提示词</label>
+                <textarea x-model="prompts[currentTopic]" class="w-full p-2 border rounded" rows="4"></textarea>
+                <button @click="generateArticles()" class="absolute bottom-2 right-2 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                    </svg>
+                </button>
+            </div>
+
+<div id="results" class="mt-8 space-y-8">
+    <div x-show="articlesByTopic[currentTopic] && articlesByTopic[currentTopic].length > 0" class="bg-white p-4 rounded shadow mb-4">
+        <h2 x-text="currentTopic" class="text-2xl font-bold mb-4"></h2>
+        <div class="space-y-4">
+            <template x-for="(article, index) in articlesByTopic[currentTopic]" :key="index">
+                <div class="border-t pt-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 x-text="'文章 ' + (index + 1)" class="text-xl font-bold"></h3>
+                        <button @click="deleteArticle(currentTopic, index)" class="text-red-500 hover:text-red-700">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                    <div x-html="article.replace(/\n/g, '<br>')"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+    <script>
+        function app() {
+            return {
+                activeTab: null,
+                settings: {
+                    apiUrl: localStorage.getItem('apiUrl') || '',
+                    apiKey: localStorage.getItem('apiKey') || '',
+                    model: localStorage.getItem('model') || 'claude-3-5-sonnet-20240620',
+                    temperature: localStorage.getItem('temperature') || 0.7,
+                    articleCount: localStorage.getItem('articleCount') || 1
+                },
+                prompts: JSON.parse(localStorage.getItem('prompts')) || {},
+                articlesByTopic: JSON.parse(localStorage.getItem('articlesByTopic')) || {},
+                topics: JSON.parse(localStorage.getItem('topics')) || [],
+                newTopic: '',
+                currentTopic: '',
+                toggleTab(tab) {
+                    this.activeTab = this.activeTab === tab ? null : tab;
+                },
+                saveSettings() {
+                    Object.keys(this.settings).forEach(key => {
+                        localStorage.setItem(key, this.settings[key]);
+                    });
+                },
+                addTopic() {
+                    if (this.newTopic.trim() && !this.topics.includes(this.newTopic.trim())) {
+                        this.topics.push(this.newTopic.trim());
+                        this.prompts[this.newTopic.trim()] = '';
+                        this.saveTopics();
+                        this.savePrompts();
+                        this.newTopic = '';
+                    }
+                },
+                deleteTopic(topic) {
+                    this.topics = this.topics.filter(t => t !== topic);
+                    delete this.articlesByTopic[topic];
+                    delete this.prompts[topic];
+                    this.saveTopics();
+                    this.saveArticles();
+                    this.savePrompts();
+                    if (this.currentTopic === topic) {
+                        this.currentTopic = this.topics[0] || '';
+                    }
+                },
+                selectTopic(topic) {
+                    this.currentTopic = topic;
+                },
+                saveTopics() {
+                    localStorage.setItem('topics', JSON.stringify(this.topics));
+                },
+                saveArticles() {
+                    localStorage.setItem('articlesByTopic', JSON.stringify(this.articlesByTopic));
+                },
+                savePrompts() {
+                    localStorage.setItem('prompts', JSON.stringify(this.prompts));
+                },
+                deleteArticle(topic, index) {
+                    this.articlesByTopic[topic].splice(index, 1);
+                    if (this.articlesByTopic[topic].length === 0) {
+                        delete this.articlesByTopic[topic];
+                    }
+                    this.saveArticles();
+                },
+                async generateArticles() {
+                    if (!this.currentTopic) {
+                        alert('请先选择一个主题');
+                        return;
+                    }
+                    
+                    const articleCount = parseInt(this.settings.articleCount);
+                    const topic = this.currentTopic;
+                    
+                    if (!this.articlesByTopic[topic]) {
+                        this.articlesByTopic[topic] = [];
+                    }
+
+                    const generatePromises = Array(articleCount).fill().map((_, index) => {
+                        this.articlesByTopic[topic][index] = [];
+                        return this.streamArticle(topic, index);
+                    });
+
+                    await Promise.all(generatePromises);
+                },
+async streamArticle(topic, index) {
+    const response = await fetch(`${this.settings.apiUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.settings.apiKey}`
+        },
+        body: JSON.stringify({
+            model: this.settings.model,
+            messages: [
+                { role: "system", content: "You are a helpful assistant." },
+                { role: "user", content: this.prompts[topic] }
+            ],
+            temperature: parseFloat(this.settings.temperature),
+            stream: true
+        })
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        
+        for (const line of lines) {
+            if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') continue;
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.choices[0].delta.content) {
+                        if (!this.articlesByTopic[topic][index]) {
+                            this.articlesByTopic[topic][index] = '';
+                        }
+                        this.articlesByTopic[topic][index] += parsed.choices[0].delta.content;
+                    }
+                } catch (e) {
+                    console.error('Error parsing stream:', e);
+                }
+            }
+        }
+    }
+
+    // 处理可能残留在buffer中的最后一部分数据
+    if (buffer) {
+        try {
+            const parsed = JSON.parse(buffer.slice(6));
+            if (parsed.choices[0].delta.content) {
+                this.articlesByTopic[topic][index] += parsed.choices[0].delta.content;
+            }
+        } catch (e) {
+            console.error('Error parsing final buffer:', e);
+        }
+    }
+
+                this.saveArticles();
+            },
+            init() {
+                if (this.topics.length > 0) {
+                    this.currentTopic = this.topics[0];
+                }
+            }
+        }
+    }
+</script>
+</body>
+</html>
