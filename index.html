@@ -265,7 +265,14 @@
                         }
                     }
                 },
-
+                copyArticle(content) {
+                    navigator.clipboard.writeText(content).then(() => {
+                        alert('文章内容已复制到剪贴板');
+                    }).catch(err => {
+                        alert('复制失败，请手动复制');
+                        console.error('复制失败:', err);
+                    });
+                },
                 async generateArticles() {
                     if (!this.currentTopic) {
                         alert('请先选择一个主题');
